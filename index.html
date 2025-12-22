@@ -3,232 +3,170 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Auto-Lap Tracker</title>
+    <title>Pro Lap Tracker</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
-        body {
-            background-color: #000;
-            color: #fff;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-            overflow: hidden;
-        }
-
-        #lap-container {
-            text-align: center;
-        }
-
-        #lap-label {
-            font-size: 1.5rem;
-            color: #00ff88;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-
-        #lap-count {
-            font-size: 10rem;
-            font-weight: 900;
-            line-height: 1;
-            margin: 10px 0;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            width: 80%;
-            margin-top: 20px;
-            text-align: center;
-        }
-
-        .stat-box {
-            background: #111;
-            padding: 15px;
-            border-radius: 15px;
-            border: 1px solid #333;
-        }
-
-        .stat-value {
-            font-size: 1.5rem;
-            font-weight: bold;
-            display: block;
-        }
-
-        .stat-label {
-            font-size: 0.8rem;
-            color: #888;
-            text-transform: uppercase;
-        }
-
-        #start-btn {
-            margin-top: 40px;
-            padding: 20px 60px;
-            font-size: 1.5rem;
-            font-weight: bold;
-            border-radius: 50px;
-            border: none;
-            background: #00ff88;
-            color: #000;
-            cursor: pointer;
-            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
-        }
-
-        #start-btn.active {
-            background: #ff4444;
-            color: #fff;
-        }
-
-        /* Background Hack: Hidden Video */
-        #silent-video {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            opacity: 0.01;
-        }
-
-        #status-indicator {
-            position: fixed;
-            top: 20px;
-            font-size: 0.7rem;
-            color: #555;
-        }
+        body { background: #000; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 10px; margin: 0; }
+        #capture-area { background: #000; width: 100%; display: flex; flex-direction: column; align-items: center; padding: 15px; border-radius: 20px; }
+        #lap-count { font-size: 6rem; font-weight: 900; color: #00ff88; margin: 0; }
+        .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; width: 100%; margin: 15px 0; }
+        .box { background: #111; padding: 10px; border-radius: 10px; text-align: center; border: 1px solid #333; }
+        .val { display: block; font-size: 1.1rem; font-weight: bold; color: #00ff88; }
+        .lbl { font-size: 0.6rem; color: #888; text-transform: uppercase; }
+        #map { height: 200px; width: 100%; border-radius: 15px; margin: 10px 0; border: 1px solid #333; }
+        .btns { display: flex; gap: 10px; width: 100%; justify-content: center; margin-bottom: 20px; }
+        button { padding: 12px 20px; border-radius: 25px; border: none; font-weight: bold; cursor: pointer; }
+        #start-btn { background: #00ff88; color: #000; flex: 2; }
+        #save-img-btn { background: #444; color: #fff; flex: 1; }
+        #history { width: 100%; padding: 10px; }
+        .history-item { background: #111; padding: 8px; margin-bottom: 5px; border-radius: 8px; font-size: 0.7rem; display: flex; justify-content: space-between; }
+        #clear-btn { font-size: 0.6rem; color: #ff4444; background: none; border: 1px solid #ff4444; padding: 3px 8px; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-    <div id="status-indicator">Waiting for Start...</div>
-
-    <div id="lap-container">
-        <div id="lap-label">Lap</div>
+    <div id="capture-area">
+        <h1 style="font-size: 0.8rem; color: #888; margin: 0;">WORKOUT SUMMARY</h1>
         <div id="lap-count">0</div>
+        
+        <div class="stats">
+            <div class="box"><span class="val" id="pace">0:00</span><span class="lbl">Pace</span></div>
+            <div class="box"><span class="val" id="best">--</span><span class="lbl">Best Lap</span></div>
+            <div class="box"><span class="val" id="timer">00:00</span><span class="lbl">Time</span></div>
+            <div class="box"><span class="val" id="steps">0</span><span class="lbl">Steps</span></div>
+            <div class="box"><span class="val" id="dist">0m</span><span class="lbl">Dist</span></div>
+            <div class="box"><span class="val" id="acc">--</span><span class="lbl">GPS Acc</span></div>
+        </div>
+
+        <div id="map"></div>
     </div>
 
-    <div class="stats-grid">
-        <div class="stat-box">
-            <span class="stat-value" id="timer">00:00</span>
-            <span class="stat-label">Total Time</span>
-        </div>
-        <div class="stat-box">
-            <span class="stat-value" id="distance">0m</span>
-            <span class="stat-label">From Start</span>
-        </div>
+    <div class="btns">
+        <button id="start-btn">START SESSION</button>
+        <button id="save-img-btn">📸 SAVE IMG</button>
     </div>
 
-    <button id="start-btn">START TRACKING</button>
-
-    <video id="silent-video" loop playsinline muted>
-        <source src="https://github.com/anars/blank-audio/raw/master/10-seconds-of-silence.mp3" type="audio/mp3">
-    </video>
+    <div id="history">
+        <h3 style="font-size: 0.8rem; border-bottom: 1px solid #333;">HISTORY <button id="clear-btn">CLEAR ALL</button></h3>
+        <div id="history-list"></div>
+    </div>
 
     <script>
-        let lapCount = 0;
-        let anchorPoint = null;
-        let isTracking = false;
-        let hasLeftGate = false;
-        let startTime = null;
-        let timerInterval = null;
-        let wakeLock = null;
+        let laps = 0, steps = 0, isRunning = false, anchor = null, hasLeft = false;
+        let lastZ = 0, startTime = null, lapStartTime = null, bestLap = Infinity;
+        let pathCoords = [], history = JSON.parse(localStorage.getItem('run_history') || '[]');
+        let map, polyline;
 
-        const lapDisplay = document.getElementById('lap-count');
-        const timerDisplay = document.getElementById('timer');
-        const distanceDisplay = document.getElementById('distance');
-        const startBtn = document.getElementById('start-btn');
-        const status = document.getElementById('status-indicator');
-        const video = document.getElementById('silent-video');
+        // Initialize Map
+        map = L.map('map', { zoomControl: false }).setView([0, 0], 15);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+        polyline = L.polyline([], {color: '#00ff88', weight: 4}).addTo(map);
 
-        // Settings
-        const GATE_RADIUS = 10; // Meters to trigger lap
-        const COOLDOWN_DIST = 25; // Meters to reset trigger
-
-        function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371e3; // Earth radius in meters
-            const φ1 = lat1 * Math.PI/180;
-            const φ2 = lat2 * Math.PI/180;
-            const Δφ = (lat2-lat1) * Math.PI/180;
-            const Δλ = (lon2-lon1) * Math.PI/180;
-
-            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                      Math.cos(φ1) * Math.cos(φ2) *
-                      Math.sin(Δλ/2) * Math.sin(Δλ/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return R * c;
+        function showHistory() {
+            document.getElementById('history-list').innerHTML = history.slice(-3).reverse().map(run => `
+                <div class="history-item">
+                    <span>${run.date}</span>
+                    <span><b>${run.laps} Laps</b></span>
+                    <span>${run.pace} Pace</span>
+                </div>
+            `).join('');
         }
+        showHistory();
 
-        async function startApp() {
-            if (!isTracking) {
-                // Initializing
-                isTracking = true;
-                startBtn.textContent = "STOP";
-                startBtn.classList.add('active');
-                startTime = Date.now();
+        async function startTracking() {
+            if (isRunning) { location.reload(); return; }
+            
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                await DeviceMotionEvent.requestPermission();
+            }
+
+            isRunning = true;
+            startTime = Date.now();
+            lapStartTime = Date.now();
+            document.getElementById('start-btn').textContent = "STOP / RESET";
+            document.getElementById('start-btn').style.background = "#ff4444";
+
+            // Steps
+            window.addEventListener('devicemotion', (e) => {
+                let z = e.accelerationIncludingGravity.z;
+                if (Math.abs(z - lastZ) > 12) {
+                    steps++; document.getElementById('steps').textContent = steps;
+                }
+                lastZ = z;
+            });
+
+            // Timer & Pace
+            setInterval(() => {
+                if(!isRunning) return;
+                let elapsed = Math.floor((Date.now() - startTime) / 1000);
+                let mins = Math.floor(elapsed/60).toString().padStart(2,'0');
+                let secs = (elapsed%60).toString().padStart(2,'0');
+                document.getElementById('timer').textContent = `${mins}:${secs}`;
                 
-                // Start Hacks
-                video.play();
-                try {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                } catch (err) {}
+                // Simple Pace calculation (mins per km)
+                let totalDistKm = parseFloat(document.getElementById('dist').textContent) / 1000;
+                if(totalDistKm > 0.01) {
+                    let p = (elapsed / 60) / totalDistKm;
+                    document.getElementById('pace').textContent = p.toFixed(2);
+                }
+            }, 1000);
 
-                // Get Anchor Point
-                navigator.geolocation.getCurrentPosition((pos) => {
-                    anchorPoint = pos.coords;
-                    status.textContent = "Anchor Set. Move 50m away.";
-                });
-
-                // Start Timers/Tracking
-                timerInterval = setInterval(updateUI, 1000);
-                navigator.geolocation.watchPosition(checkLocation, null, {
-                    enableHighAccuracy: true
-                });
-            } else {
-                location.reload(); // Simple reset
-            }
-        }
-
-        function checkLocation(pos) {
-            if (!anchorPoint) return;
-
-            const dist = calculateDistance(
-                pos.coords.latitude, pos.coords.longitude,
-                anchorPoint.latitude, anchorPoint.longitude
-            );
-
-            distanceDisplay.textContent = Math.round(dist) + "m";
-
-            // Cooldown Logic
-            if (dist > COOLDOWN_DIST) {
-                hasLeftGate = true;
-                status.textContent = "Gate Armed: Return to Start";
-            }
-
-            // Lap Trigger Logic
-            if (hasLeftGate && dist < GATE_RADIUS) {
-                lapCount++;
-                lapDisplay.textContent = lapCount;
-                hasLeftGate = false; // Reset cooldown
-                status.textContent = "Lap Detected! Move 50m away.";
+            // GPS & Map
+            navigator.geolocation.watchPosition(pos => {
+                const { latitude, longitude, accuracy } = pos.coords;
+                if (!anchor) {
+                    anchor = pos.coords;
+                    map.setView([latitude, longitude], 18);
+                }
                 
-                // Feedback
-                window.navigator.vibrate([200, 100, 200]);
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = audioCtx.createOscillator();
-                osc.connect(audioCtx.destination);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.3);
-            }
+                pathCoords.push([latitude, longitude]);
+                polyline.setLatLngs(pathCoords);
+                map.panTo([latitude, longitude]);
+
+                let d = calcDist(latitude, longitude, anchor.latitude, anchor.longitude);
+                document.getElementById('dist').textContent = Math.round(d) + "m";
+                document.getElementById('acc').textContent = Math.round(accuracy) + "m";
+
+                if (d > 25) hasLeft = true;
+                if (hasLeft && d < 10) {
+                    laps++;
+                    document.getElementById('lap-count').textContent = laps;
+                    
+                    // Best Lap Logic
+                    let lapTime = (Date.now() - lapStartTime) / 1000;
+                    if (lapTime < bestLap) {
+                        bestLap = lapTime;
+                        document.getElementById('best').textContent = lapTime.toFixed(1) + "s";
+                    }
+                    lapStartTime = Date.now();
+                    hasLeft = false;
+                    window.navigator.vibrate(200);
+                }
+            }, null, { enableHighAccuracy: true });
         }
 
-        function updateUI() {
-            const elapsed = Math.floor((Date.now() - startTime) / 1000);
-            const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
-            const secs = (elapsed % 60).toString().padStart(2, '0');
-            timerDisplay.textContent = `${mins}:${secs}`;
+        function calcDist(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; const p = Math.PI/180;
+            const a = 0.5 - Math.cos((lat2-lat1)*p)/2 + Math.cos(lat1*p)*Math.cos(lat2*p)*(1-Math.cos((lon2-lon1)*p))/2;
+            return R * 2 * Math.asin(Math.sqrt(a));
         }
 
-        startBtn.addEventListener('click', startApp);
+        document.getElementById('save-img-btn').addEventListener('click', () => {
+            html2canvas(document.querySelector("#capture-area"), { backgroundColor: "#000" }).then(canvas => {
+                let link = document.createElement('a');
+                link.download = 'workout-summary.png';
+                link.href = canvas.toDataURL();
+                link.click();
+            });
+        });
+
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            localStorage.clear(); history = []; showHistory();
+        });
+
+        document.getElementById('start-btn').addEventListener('click', startTracking);
     </script>
 </body>
 </html>
