@@ -3,40 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pro Lap Tracker</title>
+    <title>Pro Lap Tracker v5 (Total Dist)</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
-        body { background: #000; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 10px; margin: 0; }
-        #capture-area { background: #000; width: 100%; display: flex; flex-direction: column; align-items: center; padding: 15px; border-radius: 20px; }
-        #lap-count { font-size: 6rem; font-weight: 900; color: #00ff88; margin: 0; }
+        /* Dark Theme */
+        body { background: #222; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; flex-direction: column; align-items: center; padding: 10px; margin: 0; }
+        
+        #capture-area { background: #222; width: 100%; display: flex; flex-direction: column; align-items: center; padding: 15px; border-radius: 20px; }
+        #lap-count { font-size: 6rem; font-weight: 900; color: #00ff88; margin: 0; line-height: 1; }
+        
         .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; width: 100%; margin: 15px 0; }
-        .box { background: #111; padding: 10px; border-radius: 10px; text-align: center; border: 1px solid #333; }
+        .box { background: #333; padding: 10px; border-radius: 10px; text-align: center; border: 1px solid #444; }
         .val { display: block; font-size: 1.1rem; font-weight: bold; color: #00ff88; }
-        .lbl { font-size: 0.6rem; color: #888; text-transform: uppercase; }
-        #map { height: 200px; width: 100%; border-radius: 15px; margin: 10px 0; border: 1px solid #333; }
+        .lbl { font-size: 0.6rem; color: #bbb; text-transform: uppercase; }
+        
+        #map { height: 300px; width: 100%; border-radius: 15px; margin: 10px 0; border: 2px solid #555; }
+        
         .btns { display: flex; gap: 10px; width: 100%; justify-content: center; margin-bottom: 20px; }
         button { padding: 12px 20px; border-radius: 25px; border: none; font-weight: bold; cursor: pointer; }
-        #start-btn { background: #00ff88; color: #000; flex: 2; }
-        #save-img-btn { background: #444; color: #fff; flex: 1; }
-        #history { width: 100%; padding: 10px; }
-        .history-item { background: #111; padding: 8px; margin-bottom: 5px; border-radius: 8px; font-size: 0.7rem; display: flex; justify-content: space-between; }
-        #clear-btn { font-size: 0.6rem; color: #ff4444; background: none; border: 1px solid #ff4444; padding: 3px 8px; margin-top: 10px; }
+        #start-btn { background: #00ff88; color: #000; flex: 2; font-size: 1.2rem; }
+        #save-img-btn { background: #555; color: #fff; flex: 1; }
+        
+        #status-msg { font-size: 0.7rem; color: #aaa; margin-bottom: 5px; min-height: 15px; }
+        
+        #history { width: 95%; margin-top: 10px; padding-bottom: 40px; }
+        .hist-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; padding-bottom: 5px; margin-bottom: 10px; }
+        .hist-title { font-size: 0.8rem; color: #aaa; margin: 0; }
+        #clear-btn { background: none; color: #ff4444; font-size: 0.7rem; padding: 5px; border: 1px solid #ff4444; }
+        
+        .history-item { background: #333; padding: 12px; margin-bottom: 8px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; border-left: 3px solid #00ff88; }
+        .hist-date { color: #999; font-size: 0.7rem; display: block; }
+        .hist-stats { font-weight: bold; color: #fff; }
+
+        #silent-video { position: absolute; width: 1px; height: 1px; opacity: 0.01; pointer-events: none; }
     </style>
 </head>
 <body>
 
     <div id="capture-area">
-        <h1 style="font-size: 0.8rem; color: #888; margin: 0;">WORKOUT SUMMARY</h1>
+        <div id="status-msg">Ready to Start</div>
         <div id="lap-count">0</div>
         
         <div class="stats">
-            <div class="box"><span class="val" id="pace">0:00</span><span class="lbl">Pace</span></div>
+            <div class="box"><span class="val" id="pace">--</span><span class="lbl">Pace (min/km)</span></div>
             <div class="box"><span class="val" id="best">--</span><span class="lbl">Best Lap</span></div>
             <div class="box"><span class="val" id="timer">00:00</span><span class="lbl">Time</span></div>
             <div class="box"><span class="val" id="steps">0</span><span class="lbl">Steps</span></div>
-            <div class="box"><span class="val" id="dist">0m</span><span class="lbl">Dist</span></div>
+            <div class="box"><span class="val" id="total-dist">0.00</span><span class="lbl">Total Km</span></div>
             <div class="box"><span class="val" id="acc">--</span><span class="lbl">GPS Acc</span></div>
         </div>
 
@@ -44,42 +59,85 @@
     </div>
 
     <div class="btns">
-        <button id="start-btn">START SESSION</button>
-        <button id="save-img-btn">📸 SAVE IMG</button>
+        <button id="start-btn">START RUN</button>
+        <button id="save-img-btn">📸 SAVE</button>
     </div>
 
     <div id="history">
-        <h3 style="font-size: 0.8rem; border-bottom: 1px solid #333;">HISTORY <button id="clear-btn">CLEAR ALL</button></h3>
+        <div class="hist-header">
+            <h3 class="hist-title">RECENT RUNS</h3>
+            <button id="clear-btn">CLEAR ALL</button>
+        </div>
         <div id="history-list"></div>
     </div>
 
+    <video id="silent-video" loop playsinline muted>
+        <source src="https://github.com/anars/blank-audio/raw/master/10-seconds-of-silence.mp3" type="audio/mp3">
+    </video>
+
     <script>
+        // --- SETTINGS ---
+        const GATE_RADIUS = 5;      
+        const COOLDOWN_DIST = 35;   
+        const ACCURACY_LIMIT = 20;  
+        const STEP_SENSITIVITY = 12; 
+
         let laps = 0, steps = 0, isRunning = false, anchor = null, hasLeft = false;
         let lastZ = 0, startTime = null, lapStartTime = null, bestLap = Infinity;
-        let pathCoords = [], history = JSON.parse(localStorage.getItem('run_history') || '[]');
-        let map, polyline;
+        let pathCoords = [], wakeLock = null;
+        let lastDrawnPoint = null; 
+        let history = JSON.parse(localStorage.getItem('run_history_beta') || '[]');
+        
+        // NEW: Variables for Total Distance
+        let totalDistanceMeters = 0;
+        let previousGPS = null;
 
-        // Initialize Map
-        map = L.map('map', { zoomControl: false }).setView([0, 0], 15);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
-        polyline = L.polyline([], {color: '#00ff88', weight: 4}).addTo(map);
+        // Map Setup
+        let map = L.map('map', { zoomControl: false }).setView([0, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+        
+        let polyline = L.polyline([], {color: '#0055ff', weight: 5}).addTo(map);
+        let userMarker = L.marker([0,0]).addTo(map);
 
-        function showHistory() {
-            document.getElementById('history-list').innerHTML = history.slice(-3).reverse().map(run => `
+        const statusMsg = document.getElementById('status-msg');
+        const video = document.getElementById('silent-video');
+
+        renderHistory();
+
+        function renderHistory() {
+            const list = document.getElementById('history-list');
+            if (history.length === 0) {
+                list.innerHTML = '<div style="color:#666; text-align:center; padding:10px;">No runs recorded yet.</div>';
+                return;
+            }
+            list.innerHTML = history.slice().reverse().map(run => `
                 <div class="history-item">
-                    <span>${run.date}</span>
-                    <span><b>${run.laps} Laps</b></span>
-                    <span>${run.pace} Pace</span>
+                    <div>
+                        <span class="hist-date">${run.date}</span>
+                        <span class="hist-stats">${run.laps} Laps • ${run.dist} km</span>
+                    </div>
+                    <div>${run.pace} /km</div>
                 </div>
             `).join('');
         }
-        showHistory();
 
         async function startTracking() {
-            if (isRunning) { location.reload(); return; }
+            if (isRunning) { 
+                saveSession(); 
+                location.reload(); 
+                return; 
+            }
             
+            try {
+                video.play();
+                if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+            } catch (err) {}
+
             if (typeof DeviceMotionEvent.requestPermission === 'function') {
-                await DeviceMotionEvent.requestPermission();
+                try { await DeviceMotionEvent.requestPermission(); } catch (e) {}
             }
 
             isRunning = true;
@@ -87,64 +145,108 @@
             lapStartTime = Date.now();
             document.getElementById('start-btn').textContent = "STOP / RESET";
             document.getElementById('start-btn').style.background = "#ff4444";
+            statusMsg.textContent = "Setting Anchor... Stand Still.";
 
-            // Steps
-            window.addEventListener('devicemotion', (e) => {
-                let z = e.accelerationIncludingGravity.z;
-                if (Math.abs(z - lastZ) > 12) {
-                    steps++; document.getElementById('steps').textContent = steps;
-                }
-                lastZ = z;
-            });
+            window.addEventListener('devicemotion', countSteps);
+            setInterval(updateTimer, 1000);
+            navigator.geolocation.watchPosition(handleGPS, null, { enableHighAccuracy: true });
+        }
 
-            // Timer & Pace
-            setInterval(() => {
-                if(!isRunning) return;
-                let elapsed = Math.floor((Date.now() - startTime) / 1000);
-                let mins = Math.floor(elapsed/60).toString().padStart(2,'0');
-                let secs = (elapsed%60).toString().padStart(2,'0');
-                document.getElementById('timer').textContent = `${mins}:${secs}`;
-                
-                // Simple Pace calculation (mins per km)
-                let totalDistKm = parseFloat(document.getElementById('dist').textContent) / 1000;
-                if(totalDistKm > 0.01) {
-                    let p = (elapsed / 60) / totalDistKm;
-                    document.getElementById('pace').textContent = p.toFixed(2);
-                }
-            }, 1000);
+        function saveSession() {
+            const currentDist = document.getElementById('total-dist').textContent;
+            const currentPace = document.getElementById('pace').textContent;
+            const newRun = {
+                date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                laps: laps, steps: steps, dist: currentDist, pace: currentPace === '--' ? '0:00' : currentPace
+            };
+            history.push(newRun);
+            localStorage.setItem('run_history_beta', JSON.stringify(history));
+        }
 
-            // GPS & Map
-            navigator.geolocation.watchPosition(pos => {
-                const { latitude, longitude, accuracy } = pos.coords;
-                if (!anchor) {
-                    anchor = pos.coords;
-                    map.setView([latitude, longitude], 18);
-                }
-                
+        function countSteps(e) {
+            let z = e.accelerationIncludingGravity.z;
+            if (Math.abs(z - lastZ) > STEP_SENSITIVITY) {
+                steps++; document.getElementById('steps').textContent = steps;
+            }
+            lastZ = z;
+        }
+
+        function updateTimer() {
+            if(!isRunning) return;
+            let elapsed = Math.floor((Date.now() - startTime) / 1000);
+            let mins = Math.floor(elapsed/60).toString().padStart(2,'0');
+            let secs = (elapsed%60).toString().padStart(2,'0');
+            document.getElementById('timer').textContent = `${mins}:${secs}`;
+            
+            // Pace Calc (Using Total Distance now)
+            let totalKm = totalDistanceMeters / 1000;
+            if(totalKm > 0.05) {
+                let p = (elapsed / 60) / totalKm;
+                document.getElementById('pace').textContent = p.toFixed(2);
+            }
+        }
+
+        function handleGPS(pos) {
+            const { latitude, longitude, accuracy } = pos.coords;
+            document.getElementById('acc').textContent = Math.round(accuracy) + "m";
+            userMarker.setLatLng([latitude, longitude]);
+
+            // Set Anchor
+            if (!anchor && accuracy < 25) {
+                anchor = pos.coords;
+                previousGPS = { lat: latitude, lng: longitude }; // Init previous GPS
+                lastDrawnPoint = { lat: latitude, lng: longitude };
+                map.setView([latitude, longitude], 18);
+                statusMsg.textContent = "Anchor Set! Run 35m away.";
+                L.circle([latitude, longitude], {radius: GATE_RADIUS, color: 'red', fillOpacity: 0.2}).addTo(map);
+            }
+            if (!anchor) return;
+
+            // --- 1. CALCULATE TOTAL DISTANCE ---
+            // Calc distance between CURRENT point and LAST point
+            let stepDist = calcDist(latitude, longitude, previousGPS.lat, previousGPS.lng);
+            
+            // Noise Filter: Only add to total if moved more than 2 meters
+            if (stepDist > 2) {
+                totalDistanceMeters += stepDist;
+                previousGPS = { lat: latitude, lng: longitude }; // Update last point
+                // Update UI: Convert meters to KM
+                document.getElementById('total-dist').textContent = (totalDistanceMeters / 1000).toFixed(2);
+            }
+
+            // --- 2. MAP SMOOTHING ---
+            let distFromLastDraw = calcDist(latitude, longitude, lastDrawnPoint.lat, lastDrawnPoint.lng);
+            if (distFromLastDraw > 4) {
                 pathCoords.push([latitude, longitude]);
                 polyline.setLatLngs(pathCoords);
                 map.panTo([latitude, longitude]);
+                lastDrawnPoint = { lat: latitude, lng: longitude };
+            }
 
-                let d = calcDist(latitude, longitude, anchor.latitude, anchor.longitude);
-                document.getElementById('dist').textContent = Math.round(d) + "m";
-                document.getElementById('acc').textContent = Math.round(accuracy) + "m";
+            // --- 3. LAP LOGIC (Still needs Dist from Anchor) ---
+            let distFromAnchor = calcDist(latitude, longitude, anchor.latitude, anchor.longitude);
+            
+            // Note: We don't display distFromAnchor anymore, but we use it for logic:
+            if (distFromAnchor > COOLDOWN_DIST) {
+                hasLeft = true;
+                statusMsg.textContent = "Return to Start...";
+                statusMsg.style.color = "#00ff88";
+            }
 
-                if (d > 25) hasLeft = true;
-                if (hasLeft && d < 10) {
-                    laps++;
-                    document.getElementById('lap-count').textContent = laps;
-                    
-                    // Best Lap Logic
-                    let lapTime = (Date.now() - lapStartTime) / 1000;
-                    if (lapTime < bestLap) {
-                        bestLap = lapTime;
-                        document.getElementById('best').textContent = lapTime.toFixed(1) + "s";
-                    }
-                    lapStartTime = Date.now();
-                    hasLeft = false;
-                    window.navigator.vibrate(200);
+            if (hasLeft && distFromAnchor < GATE_RADIUS && accuracy < ACCURACY_LIMIT) {
+                laps++;
+                document.getElementById('lap-count').textContent = laps;
+                let lapTime = (Date.now() - lapStartTime) / 1000;
+                if (lapTime < bestLap) {
+                    bestLap = lapTime;
+                    document.getElementById('best').textContent = lapTime.toFixed(1) + "s";
                 }
-            }, null, { enableHighAccuracy: true });
+                lapStartTime = Date.now();
+                hasLeft = false;
+                statusMsg.textContent = "Lap! Go 35m away.";
+                statusMsg.style.color = "#fff";
+                window.navigator.vibrate(200);
+            }
         }
 
         function calcDist(lat1, lon1, lat2, lon2) {
@@ -154,16 +256,20 @@
         }
 
         document.getElementById('save-img-btn').addEventListener('click', () => {
-            html2canvas(document.querySelector("#capture-area"), { backgroundColor: "#000" }).then(canvas => {
+            html2canvas(document.querySelector("#capture-area"), { backgroundColor: "#222" }).then(canvas => {
                 let link = document.createElement('a');
-                link.download = 'workout-summary.png';
+                link.download = 'workout.png';
                 link.href = canvas.toDataURL();
                 link.click();
             });
         });
 
         document.getElementById('clear-btn').addEventListener('click', () => {
-            localStorage.clear(); history = []; showHistory();
+            if(confirm("Delete all history?")) {
+                localStorage.removeItem('run_history_beta');
+                history = [];
+                renderHistory();
+            }
         });
 
         document.getElementById('start-btn').addEventListener('click', startTracking);
