@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Auto-Lap Tracker</title>
+    <title>Auto-Lap Tracker (Main)</title>
     <style>
         body {
             background-color: #000;
@@ -18,30 +18,17 @@
             overflow: hidden;
         }
 
-        #lap-container {
-            text-align: center;
-        }
+        #lap-container { text-align: center; margin-bottom: 20px; }
+        #lap-label { font-size: 1.5rem; color: #00ff88; text-transform: uppercase; letter-spacing: 2px; }
+        #lap-count { font-size: 10rem; font-weight: 900; line-height: 1; margin: 10px 0; }
 
-        #lap-label {
-            font-size: 1.5rem;
-            color: #00ff88;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-
-        #lap-count {
-            font-size: 10rem;
-            font-weight: 900;
-            line-height: 1;
-            margin: 10px 0;
-        }
-
+        /* Updated Grid to fit 4 items */
         .stats-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            width: 80%;
-            margin-top: 20px;
+            gap: 15px;
+            width: 90%;
+            max-width: 400px;
             text-align: center;
         }
 
@@ -52,20 +39,15 @@
             border: 1px solid #333;
         }
 
-        .stat-value {
-            font-size: 1.5rem;
-            font-weight: bold;
-            display: block;
-        }
-
-        .stat-label {
-            font-size: 0.8rem;
-            color: #888;
-            text-transform: uppercase;
-        }
+        .stat-value { font-size: 1.5rem; font-weight: bold; display: block; color: #fff; }
+        .stat-label { font-size: 0.7rem; color: #888; text-transform: uppercase; margin-top: 5px; }
+        
+        /* Highlight the new Total Dist box */
+        #total-box { border-color: #00ff88; }
+        #total-dist { color: #00ff88; }
 
         #start-btn {
-            margin-top: 40px;
+            margin-top: 30px;
             padding: 20px 60px;
             font-size: 1.5rem;
             font-weight: bold;
@@ -77,75 +59,73 @@
             box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
         }
 
-        #start-btn.active {
-            background: #ff4444;
-            color: #fff;
-        }
+        #start-btn.active { background: #ff4444; color: #fff; box-shadow: none; }
 
-        /* Background Hack: Hidden Video */
-        #silent-video {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            opacity: 0.01;
-        }
-
-        #status-indicator {
-            position: fixed;
-            top: 20px;
-            font-size: 0.7rem;
-            color: #555;
-        }
+        /* Hidden Video for Wake Lock */
+        #silent-video { position: absolute; width: 1px; height: 1px; opacity: 0.01; }
+        #status-indicator { position: fixed; top: 20px; font-size: 0.8rem; color: #555; }
     </style>
 </head>
 <body>
 
-    <div id="status-indicator">Waiting for Start...</div>
+    <div id="status-indicator">Ready to Run</div>
 
     <div id="lap-container">
-        <div id="lap-label">Lap</div>
+        <div id="lap-label">Laps</div>
         <div id="lap-count">0</div>
     </div>
 
     <div class="stats-grid">
         <div class="stat-box">
             <span class="stat-value" id="timer">00:00</span>
-            <span class="stat-label">Total Time</span>
+            <span class="stat-label">Time</span>
+        </div>
+        <div class="stat-box" id="total-box">
+            <span class="stat-value" id="total-dist">0.00</span>
+            <span class="stat-label">Total Km</span>
         </div>
         <div class="stat-box">
             <span class="stat-value" id="distance">0m</span>
             <span class="stat-label">From Start</span>
         </div>
+        <div class="stat-box">
+            <span class="stat-value" id="gps-acc">--</span>
+            <span class="stat-label">GPS Acc.</span>
+        </div>
     </div>
 
-    <button id="start-btn">START TRACKING</button>
+    <button id="start-btn">START</button>
 
     <video id="silent-video" loop playsinline muted>
         <source src="https://github.com/anars/blank-audio/raw/master/10-seconds-of-silence.mp3" type="audio/mp3">
     </video>
 
     <script>
+        // --- YOUR SETTINGS ---
+        const GATE_RADIUS = 5;     // Meters (Finish Line size)
+        const COOLDOWN_DIST = 35;  // Meters (Reset distance)
+        // ---------------------
+
         let lapCount = 0;
+        let totalDistanceMeters = 0; // Tracks total run
         let anchorPoint = null;
+        let lastPosition = null; // Tracks previous step
         let isTracking = false;
         let hasLeftGate = false;
         let startTime = null;
-        let timerInterval = null;
         let wakeLock = null;
 
         const lapDisplay = document.getElementById('lap-count');
         const timerDisplay = document.getElementById('timer');
-        const distanceDisplay = document.getElementById('distance');
+        const distFromStartDisplay = document.getElementById('distance');
+        const totalDistDisplay = document.getElementById('total-dist');
+        const accDisplay = document.getElementById('gps-acc');
         const startBtn = document.getElementById('start-btn');
         const status = document.getElementById('status-indicator');
         const video = document.getElementById('silent-video');
 
-        // Settings
-        const GATE_RADIUS = 10; // Meters to trigger lap
-        const COOLDOWN_DIST = 25; // Meters to reset trigger
-
         function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371e3; // Earth radius in meters
+            const R = 6371e3; 
             const φ1 = lat1 * Math.PI/180;
             const φ2 = lat2 * Math.PI/180;
             const Δφ = (lat2-lat1) * Math.PI/180;
@@ -160,68 +140,70 @@
 
         async function startApp() {
             if (!isTracking) {
-                // Initializing
                 isTracking = true;
                 startBtn.textContent = "STOP";
                 startBtn.classList.add('active');
                 startTime = Date.now();
-                
-                // Start Hacks
-                video.play();
-                try {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                } catch (err) {}
+                video.play(); // Wake Lock Hack
+                try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch(e){}
 
-                // Get Anchor Point
-                navigator.geolocation.getCurrentPosition((pos) => {
-                    anchorPoint = pos.coords;
-                    status.textContent = "Anchor Set. Move 50m away.";
-                });
-
-                // Start Timers/Tracking
-                timerInterval = setInterval(updateUI, 1000);
-                navigator.geolocation.watchPosition(checkLocation, null, {
-                    enableHighAccuracy: true
-                });
+                // Start Loop
+                setInterval(updateTimer, 1000);
+                navigator.geolocation.watchPosition(checkLocation, null, { enableHighAccuracy: true });
+                status.textContent = "Waiting for GPS...";
             } else {
-                location.reload(); // Simple reset
+                location.reload();
             }
         }
 
         function checkLocation(pos) {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            const acc = pos.coords.accuracy;
+
+            accDisplay.textContent = Math.round(acc) + "m";
+
+            // Set Start Point (Anchor)
+            if (!anchorPoint && acc < 20) {
+                anchorPoint = pos.coords;
+                lastPosition = pos.coords; // Initialize last position
+                status.textContent = "Anchor Set! Go!";
+            }
+            
             if (!anchorPoint) return;
 
-            const dist = calculateDistance(
-                pos.coords.latitude, pos.coords.longitude,
-                anchorPoint.latitude, anchorPoint.longitude
-            );
-
-            distanceDisplay.textContent = Math.round(dist) + "m";
-
-            // Cooldown Logic
-            if (dist > COOLDOWN_DIST) {
-                hasLeftGate = true;
-                status.textContent = "Gate Armed: Return to Start";
+            // 1. CALCULATE TOTAL DISTANCE
+            if (lastPosition) {
+                const stepDist = calculateDistance(lat, lon, lastPosition.latitude, lastPosition.longitude);
+                // Noise Filter: Only count if moved more than 2 meters
+                if (stepDist > 2) { 
+                    totalDistanceMeters += stepDist;
+                    lastPosition = pos.coords; // Update last pos
+                }
+                // Update UI (Convert to km)
+                totalDistDisplay.textContent = (totalDistanceMeters / 1000).toFixed(2);
             }
 
-            // Lap Trigger Logic
-            if (hasLeftGate && dist < GATE_RADIUS) {
+            // 2. CALCULATE LAP LOGIC
+            const distFromStart = calculateDistance(lat, lon, anchorPoint.latitude, anchorPoint.longitude);
+            distFromStartDisplay.textContent = Math.round(distFromStart) + "m";
+
+            if (distFromStart > COOLDOWN_DIST) {
+                hasLeftGate = true;
+                status.textContent = "Return to Start...";
+            }
+
+            if (hasLeftGate && distFromStart < GATE_RADIUS && acc < 20) {
                 lapCount++;
                 lapDisplay.textContent = lapCount;
-                hasLeftGate = false; // Reset cooldown
-                status.textContent = "Lap Detected! Move 50m away.";
-                
-                // Feedback
-                window.navigator.vibrate([200, 100, 200]);
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = audioCtx.createOscillator();
-                osc.connect(audioCtx.destination);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.3);
+                hasLeftGate = false;
+                status.textContent = "Lap! Go again.";
+                window.navigator.vibrate(200);
             }
         }
 
-        function updateUI() {
+        function updateTimer() {
+            if (!startTime) return;
             const elapsed = Math.floor((Date.now() - startTime) / 1000);
             const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
             const secs = (elapsed % 60).toString().padStart(2, '0');
